@@ -11,6 +11,7 @@ import {
   HostListener,
   Inject,
   Input,
+  NgZone,
   OnDestroy,
   OnInit,
   Output,
@@ -24,6 +25,7 @@ import { AngularEditorToolbarComponent } from './angular-editor-toolbar.componen
 import { AngularEditorService } from './angular-editor.service';
 import { AngularEditorConfig, angularEditorConfig } from './config';
 import { isDefined } from './utils';
+import { fromEvent, Subscription } from 'rxjs';
 
 @Component({
   selector: 'angular-editor',
@@ -52,6 +54,8 @@ export class AngularEditorComponent implements OnInit, ControlValueAccessor, Aft
 
   focusInstance: any;
   blurInstance: any;
+
+  mouseOutSubscription: Subscription;
 
   @Input() id = '';
   @Input() config: AngularEditorConfig = angularEditorConfig;
@@ -90,7 +94,8 @@ export class AngularEditorComponent implements OnInit, ControlValueAccessor, Aft
     private sanitizer: DomSanitizer,
     private cdRef: ChangeDetectorRef,
     @Attribute('tabindex') defaultTabIndex: string,
-    @Attribute('autofocus') private autoFocus: any
+    @Attribute('autofocus') private autoFocus: any,
+    private ngZone: NgZone
   ) {
     const parsedTabIndex = Number(defaultTabIndex);
     this.tabIndex = (parsedTabIndex || parsedTabIndex === 0) ? parsedTabIndex : null;
@@ -103,6 +108,13 @@ export class AngularEditorComponent implements OnInit, ControlValueAccessor, Aft
   ngAfterViewInit() {
     if (isDefined(this.autoFocus)) {
       this.focus();
+    }
+    if (isDefined(this.textArea)) {
+      this.ngZone.runOutsideAngular(() => {
+        this.mouseOutSubscription = fromEvent(this.textArea.nativeElement, 'mouseout').subscribe((event: MouseEvent) => {
+          this.onTextAreaMouseOut();
+        });
+      });
     }
   }
 
@@ -162,7 +174,7 @@ export class AngularEditorComponent implements OnInit, ControlValueAccessor, Aft
   /**
    * @description fires when cursor leaves textarea
    */
-  public onTextAreaMouseOut(event: MouseEvent): void {
+  public onTextAreaMouseOut(): void {
     this.editorService.saveSelection();
   }
 
@@ -421,6 +433,9 @@ export class AngularEditorComponent implements OnInit, ControlValueAccessor, Aft
     }
     if (this.focusInstance) {
       this.focusInstance();
+    }
+    if (this.mouseOutSubscription) {
+      this.mouseOutSubscription.unsubscribe();
     }
   }
 
