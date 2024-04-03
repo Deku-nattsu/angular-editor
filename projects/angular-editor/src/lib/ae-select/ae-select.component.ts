@@ -1,11 +1,13 @@
 import {
-  Attribute,
+  AfterViewInit,
   Component,
   ElementRef,
   EventEmitter,
   forwardRef, HostBinding,
   HostListener,
   Input,
+  NgZone,
+  OnDestroy,
   OnInit,
   Output,
   Renderer2,
@@ -14,6 +16,7 @@ import {
 } from '@angular/core';
 import {ControlValueAccessor, NG_VALUE_ACCESSOR} from '@angular/forms';
 import {isDefined} from '../utils';
+import { fromEvent, Subscription } from 'rxjs';
 
 export interface SelectOption {
   label: string;
@@ -33,7 +36,7 @@ export interface SelectOption {
     }
   ]
 })
-export class AeSelectComponent implements OnInit, ControlValueAccessor {
+export class AeSelectComponent implements AfterViewInit, OnInit, OnDestroy, ControlValueAccessor {
   @Input() options: SelectOption[] = [];
   // eslint-disable-next-line @angular-eslint/no-input-rename
   @Input('hidden') isHidden: boolean;
@@ -59,14 +62,37 @@ export class AeSelectComponent implements OnInit, ControlValueAccessor {
 
   @ViewChild('labelButton', {static: true}) labelButton: ElementRef;
 
+  clickSubscription: Subscription | undefined;
+
   constructor(private elRef: ElementRef,
               private r: Renderer2,
+              private ngZone: NgZone
   ) {}
+
+  ngAfterViewInit(): void {
+    this.ngZone.runOutsideAngular(() => {
+      this.clickSubscription = fromEvent(document, 'click').subscribe((event: MouseEvent) => {
+        if (!this.elRef.nativeElement.contains(event.target)) {
+          if (this.opened) {
+              this.ngZone.run(() => {
+                this.close();
+              });
+          }
+        }
+      });
+    });
+  }
 
   ngOnInit() {
     this.selectedOption = this.options[0];
     if (isDefined(this.isHidden) && this.isHidden) {
       this.hide();
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.clickSubscription) {
+      this.clickSubscription.unsubscribe();
     }
   }
 
@@ -89,13 +115,6 @@ export class AeSelectComponent implements OnInit, ControlValueAccessor {
       return;
     }
     this.opened = !this.opened;
-  }
-
-  @HostListener('document:click', ['$event'])
-  onClick($event: MouseEvent) {
-    if (!this.elRef.nativeElement.contains($event.target)) {
-      this.close();
-    }
   }
 
   close() {
